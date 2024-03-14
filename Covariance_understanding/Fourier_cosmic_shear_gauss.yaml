@@ -1,0 +1,32 @@
+tjpcov:
+  sacc_file: /home/c2042999/PCA_project/Covariance_understanding/cl_and_xi_data.fits
+
+  cosmo: Covariance_understanding/cosmo_MCMC.yaml
+
+  cov_type: [FourierGaussianFsky]
+  
+  # Survey params:
+  # 5 lens bins
+  {% for i in range(5) %} 
+  Ngal_lens{{ i }}: {{26}} # arc_min^2
+  {% endfor %}
+
+  # 5 source bins
+  {% for i in range(5) %} 
+  Ngal_src{{ i }}: {{26}} # arc_min^2
+  {% endfor %}
+
+  # constant bin sigma_e
+  {% for i in range(5) %} 
+  sigma_e_src{{ i }}: {{ 0.26 }}
+  {% endfor %}
+
+  # linear bias for lenses constant for redshift bin (example notebook)
+  {% for i, val in [(0, 1.5), (1, 1.5), (2, 1.5), (3, 1.5), (4, 1.5)] %}
+  bias_lens{{ i }}: {{ val }}
+  {% endfor %}
+
+  IA: 0.5
+
+GaussianFsky:
+  fsky: 0.3
