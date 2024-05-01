@@ -1,7 +1,7 @@
 tjpcov:
   sacc_file: /home/c2042999/PCA_project/Covariance_understanding/cl_and_xi_data.fits
 
-  cosmo: Covariance_understanding/cosmo_MCMC.yaml
+  cosmo: /home/c2042999/PCA_project/Covariance_understanding/cosmo_MCMC.yaml
 
   cov_type: [FourierGaussianFsky]
   
