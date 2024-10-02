@@ -208,8 +208,9 @@ def main(args):
     
     ell_bin_num_mockdata = 13
     
+    print("collecting data")
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~ Get mock C(ell) data ~~~~~~~~~~~~~~~~~~~~~~~~
-    
     ## LENSING - LENSING
     
     binned_ell = bin_ell_kk(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, Binned_distribution_source)
@@ -353,11 +354,10 @@ def main(args):
     ###############################################################################
     # Apply Scale Cuts
     ###############################################################################
-    
-    # ~~~~~~~~~~~~~~~~~~~~~~~~ linear scale cuts ~~~~~~~~~~~~~~~~~~~~~~~~
-    
     print("starting linear scale cuts")
-    
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~ linear scale cuts ~~~~~~~~~~~~~~~~~~~~~~~~
+        
     newdat_test = linear_scale_cuts_v2(D_mockdata, D_data_lin_plot, SRD_compare)
     
     gauss_invcov_cut = np.linalg.pinv(SRD_compare.copy())
@@ -432,7 +432,7 @@ def main(args):
     del mockdata
     
     print("starting baryonic scale cuts")
-    newdat = baryonic_scale_cuts_v2(cosmo_universe, ell_mockdata, D_mockdata_test, D_kk_mockdata_test, D_kk_mockdata_kmax, SRD_compare)
+    newdat = baryonic_scale_cuts_v2(ell_mockdata, D_mockdata_test, D_kk_mockdata_test, D_kk_mockdata_kmax, SRD_compare)
     
     L_choleski = L_choleski_uncut
     L_choleski_inv = L_choleski_inv_uncut
@@ -459,24 +459,22 @@ def main(args):
              L_ch_inv = L_choleski_inv,
              Inverse_cov=gauss_invcov_rotated)
 
-
-    
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Get simulated 3x2pt+fsigma8 data for a given universe cosmology and gravty theory')
     # MCMC parameters
-    parser.add_argument('--b1', type=float, default=1.229, help='linear galaxy bias parameter for first bin')
-    parser.add_argument('--b2', type=float, default=1.362, help='linear galaxy bias parameter for second bin')
-    parser.add_argument('--b3', type=float, default=1.502, help='linear galaxy bias parameter for third bin')
-    parser.add_argument('--b4', type=float, default=1.648, help='linear galaxy bias parameter for fourth bin')
-    parser.add_argument('--b5', type=float, default=1.799, help='linear galaxy bias parameter for fifth bin')
-    parser.add_argument('--OmgC', type=float, default=0.27, help='Omega_c, Dark Matter dimensionless energy density')
-    parser.add_argument('--OmgB', type=float, default=0.046, help='Omega_b, Baryonic Matter dimensionless energy density')
-    parser.add_argument('--h', type=float, default=0.7, help='h, reduced hubble parameter')
-    parser.add_argument('--ns', type=float, default=0.974, help='n_s, scalar spectral index')
-    parser.add_argument('--As', type=float, default=2.1e-9, help='A_s, primordial amplitude of matter fluctuations')
+    parser.add_argument('--b1', type=float, default=1.562362, help='linear galaxy bias parameter for first bin')
+    parser.add_argument('--b2', type=float, default=1.732963, help='linear galaxy bias parameter for second bin')
+    parser.add_argument('--b3', type=float, default=1.913252, help='linear galaxy bias parameter for third bin')
+    parser.add_argument('--b4', type=float, default=2.100644, help='linear galaxy bias parameter for fourth bin')
+    parser.add_argument('--b5', type=float, default=2.293210, help='linear galaxy bias parameter for fifth bin')
+    parser.add_argument('--OmgC', type=float, default=0.269619, help='Omega_c, Dark Matter dimensionless energy density')
+    parser.add_argument('--OmgB', type=float, default=0.050041, help='Omega_b, Baryonic Matter dimensionless energy density')
+    parser.add_argument('--h', type=float, default=0.6688, help='h, reduced hubble parameter')
+    parser.add_argument('--ns', type=float, default=0.9626, help='n_s, scalar spectral index')
+    parser.add_argument('--As', type=float, default=2.092e-9, help='A_s, primordial amplitude of matter fluctuations')
     parser.add_argument('--gravity_flag', type=str, default='f(R)', help='gravity model, choice between f(R) and nDGP')
-    parser.add_argument('--MG_param', type=float, default=1e-5, help='characteristic modified gravity parameter of the MG gravity (fR0 or H0r_c)')
+    parser.add_argument('--MG_param', type=float, default=3e-5, help='characteristic modified gravity parameter of the MG gravity (fR0 or H0r_c)')
     # carry on from here
     args = parser.parse_args()
 

@@ -90,6 +90,8 @@ pars = camb.CAMBparams()
 ###################################################################
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~ Non-Linear ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""Non-linear matter power spectra (f(R) and nDGP)"""
+
 # NL matter power spectra in nDGP
 def P_k_NL_nDGP(cosmo, MGparams, k, a):
     """
@@ -100,29 +102,24 @@ def P_k_NL_nDGP(cosmo, MGparams, k, a):
     
     output Pk_nDGP (array) -> Nonlinear matter power spectrum for nDGP gravity, units (Mpc)^3
     """
-    Pk_ccl = ccl.power.nonlin_power(cosmo, k, a=a) # units (Mpc)^3
     # Turn k into units of h/Mpc
     k = k/cosmo["h"]
 
     H0rc, fR0, n, mu, Sigma = MGparams
+
+    # nDGP emulator - get boost
+    cosmo_params = {'Om':cosmo["Omega_m"],
+                    'ns':cosmo["n_s"],
+                    'As':cosmo["A_s"],
+                    'h':cosmo["h"],
+                    'Ob':cosmo["Omega_b"]}
+
+    pkratio_nDGP = model_nDGP.predict(H0rc, 1/a -1 , cosmo_params, k_out=k)
+
+    # Get GR power spectrum
     
-    if H0rc == 0:
-        return Pk_ccl
-    elif 1/(4*H0rc**2) == 0:
-        return Pk_ccl
-    else:
-        # nDGP emulator - get boost
-        cosmo_params = {'Om':cosmo["Omega_m"],
-                        'ns':cosmo["n_s"],
-                        'As':cosmo["A_s"],
-                        'h':cosmo["h"],
-                        'Ob':cosmo["Omega_b"]}
-    
-        pkratio_nDGP = model_nDGP.predict(H0rc, 1/a -1 , cosmo_params, k_out=k)
-    
-        # Get GR power spectrum
-        
-        return pkratio_nDGP*Pk_ccl
+    Pk_ccl = ccl.power.nonlin_power(cosmo, k*cosmo["h"], a=a) # units (Mpc)^3
+    return pkratio_nDGP*Pk_ccl
 
 # NL matter power spectra in fR
 def P_k_NL_fR(cosmo, MGparams, k, a):
@@ -135,19 +132,17 @@ def P_k_NL_fR(cosmo, MGparams, k, a):
     output Pk_fR (array) -> Nonlinear matter power spectrum for Hu-Sawicki fR gravity, units (Mpc)^3
     """
     H0rc, fR0, n, mu, Sigma = MGparams
-    Pk_ccl = ccl.power.nonlin_power(cosmo, k, a=a) # units (Mpc)^3
-    if fR0 == 0:
-        return Pk_ccl
-    else:
-        sigma8_VAL_lcdm = ccl.sigma8(cosmo)
-        
-        pkratio_fR = emu_fR.predict_boost(cosmo["Omega_m"], sigma8_VAL_lcdm, -np.log10(fR0), a, k = k/cosmo["h"])
-        # k is in units [h/Mpc]
-    
-        Pk = pkratio_fR*Pk_ccl
-    
-        return Pk
 
+    sigma8_VAL_lcdm = ccl.sigma8(cosmo)
+    
+    pkratio_fR = emu_fR.predict_boost(cosmo["Omega_m"], sigma8_VAL_lcdm, -np.log10(fR0), a, k = k/cosmo["h"])
+    # k is in units [h/Mpc]
+
+    Pk_ccl = ccl.power.nonlin_power(cosmo, k, a=a) # units (Mpc)^3
+    Pk = pkratio_fR*Pk_ccl
+
+    return Pk
+    
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Linear ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """Linear matter power spectra nDGP"""
 
@@ -223,7 +218,6 @@ def P_k_nDGP_lin(cosmo, MGparams, k, a):
     Delta_nDGP_49 = Delta[idx_mdom]
     Delta_GR_49 = Delta_GR[idx_mdom]
     return Pk_GR * np.interp(a, a_solver, (Delta / Delta_nDGP_49) **2 / (Delta_GR / Delta_GR_49)**2)  # units (Mpc)^3
-
 """Linear matter power spectra f(R)"""
 
 @lru_cache(maxsize=128)  # You can adjust maxsize according to your memory constraints
@@ -265,8 +259,8 @@ def mu_fR(fR0, cosmo, k, a):
         return 1 + (k/a)**2/3/Pi
 
 """linear matter power spectra (parametrizations)"""
-# for now assume sigma = 1
 
+"""
 def mu_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
     E_val = E(cosmoMCMCStep, a)
@@ -276,16 +270,38 @@ def sigma_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
     E_val = E(cosmoMCMCStep, a)
     return 1 + Sigma0/E_val**2
+"""
+
+def mu_lin_param(MGparams, cosmoMCMCStep, a):
+    
+    H0rc, fR0, n, gamma0, gamma1 = MGparams
+    Omg_m = cosmoMCMCStep["Omega_m"]*a**(-3)/E(cosmoMCMCStep, a)**2
+    gamma = gamma0 + gamma1*(a+ 1/a -2)
+    
+    mu = 2/3*Omg_m**(gamma-1) * (gamma1*(a-1/a)*np.log(Omg_m) + Omg_m**gamma + 2 -3*gamma + 3*(gamma-0.5)*Omg_m)
+    #mu_const = 2/3*Omg_m**(gamma0-1) * (Omg_m**gamma0 + 2 -3*gamma0 + 3*(gamma0-0.5)*Omg_m)
+    #mu = 2/3*Omg_m**(gamma-1) *gamma1*(a-1/a)*np.log(Omg_m) + mu_const
+
+    return mu
+
+def sigma_lin_param(MGparams, cosmoMCMCStep, a):
+    return 1
 
 def solverGrowth_musigma(y,a,cosmoMCMCStep, MGparams):
     E_val = E(cosmoMCMCStep, a)
     D , a3EdDda = y
 
     mu = mu_lin_param(MGparams, cosmoMCMCStep, a)
-    Sigma = sigma_lin_param(MGparams, cosmoMCMCStep, a)
-    eta = 2*Sigma/mu - 1
     
-    ydot = [a3EdDda / (E_val*a**3), 3*cosmoMCMCStep["Omega_m"]*D*(mu/eta)/(2*E_val*a**2)]
+    ydot = [a3EdDda / (E_val*a**3), 3*cosmoMCMCStep["Omega_m"]*D*(mu)/(2*E_val*a**2)]
+    return ydot
+
+def solverGrowth_GR(y,a,cosmoMCMCStep):
+    E_val = E(cosmoMCMCStep, a)
+    D , a3EdDda = y
+
+    
+    ydot = [a3EdDda / (E_val*a**3), 3*cosmoMCMCStep["Omega_m"]*D/(2*E_val*a**2)]
     return ydot
     
 def P_k_musigma(cosmoMCMCStep, MGparams, k, a):
@@ -307,8 +323,8 @@ def P_k_musigma(cosmoMCMCStep, MGparams, k, a):
                   args=(cosmoMCMCStep,MGparams), mxstep=int(1e4))
     
     Delta = Soln.T[0]
-    Soln = odeint(solverGrowth_musigma, [a_solver[0], (E(cosmoMCMCStep, a_solver[0])*a_solver[0]**3)], a_solver,\
-                  args=(cosmoMCMCStep,[0,0,0,0,0]), mxstep=int(1e4))
+    Soln = odeint(solverGrowth_GR, [a_solver[0], (E(cosmoMCMCStep, a_solver[0])*a_solver[0]**3)], a_solver,\
+                  args=(cosmoMCMCStep,), mxstep=int(1e4))
     
     Delta_GR = Soln.T[0]
 
@@ -323,10 +339,11 @@ def P_k_musigma(cosmoMCMCStep, MGparams, k, a):
     
     return Pk_GR * np.interp(a, a_solver, (Delta / Delta_49) **2 / (Delta_GR / Delta_GR_49)**2)  # units (Mpc)^3
 
+
+
 ###################################################################
 ################### SIGMA8 AND F FUNCTIONS ########################
 ###################################################################
-
 def sigma_8_musigma(cosmo, MGparams, a_array):
     k_val = np.logspace(-4, 3, 3000)
     sigma_8_vals = []
@@ -383,7 +400,8 @@ def fsigma8_musigma(cosmoMCMCStep, MGparams, a):
     H0rc, fR0, n, mu, Sigma = MGparams
     
     # Get growth factor in musigma
-    a_solver = np.linspace(1e-3,1,int(1e3))
+    # Get growth factor in nDGP and GR
+    a_solver = np.linspace(1/50,1,100)
     Soln = odeint(solverGrowth_musigma, [a_solver[0], (E(cosmoMCMCStep, a_solver[0])*a_solver[0]**3)], a_solver, \
                   args=(cosmoMCMCStep,MGparams), mxstep=int(1e4))
     
@@ -465,6 +483,7 @@ def fsigma8_fR(cosmoMCMCStep, MGparams, a):
     k_val = np.logspace(-4,3,3000)
     return f_fR * sigma_8_fR(cosmoMCMCStep, MGparams, a)
 
+
 ###################################################################
 ################### ANGULAR P(k) FUNCTIONS ########################
 ###################################################################
@@ -522,6 +541,7 @@ def bin_ell_deldel(ell_min, ell_max, ell_bin_num, Binned_distribution):
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Cell ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+"""Functions to find Cell given a Pdelta_2D ccl object"""
 """Functions to find Cell given a Pdelta_2D ccl object"""
 
 # A: Function for cosmic shear angular power spectrum (lensing-lensing C_ell) from a given P_delta2D_S
@@ -670,8 +690,8 @@ def C_ell_arr_deldel_GR(ell_binned, cosmo, z, Binned_distribution_s, Binned_dist
                     idx += 1
     return C_ell_array
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Pk_2D object ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Pk_2D object ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 def Get_Pk2D_obj(cosmo, MGParams,linear=False,gravity_model="GR"):
     """
     Finds Get_Pk2D object
@@ -732,8 +752,10 @@ def Get_Pk2D_obj(cosmo, MGParams,linear=False,gravity_model="GR"):
         k_allowed = k[idx_min:idx_max]
         
         # Calculate power spectra for different k ranges
-        pk_lin_start = Pk_low = P_k_fR_lin(cosmo, MGParams, k[:idx_min], a)/ccl.linear_matter_power(cosmo, k=k[:idx_min], a=a) \
-                     * ccl.nonlin_matter_power(cosmo, k=k[:idx_min], a=a)
+        interp_funct_fR = scipy.interpolate.PchipInterpolator([1e-3,k[idx_min]], \
+                [1.0,P_k_NL_fR(cosmo, MGParams, k[idx_min], a)[0]/ccl.nonlin_matter_power(cosmo,k[idx_min],a=a)])
+
+        pk_lin_start = interp_funct_fR(k[:idx_min]) * ccl.nonlin_matter_power(cosmo, k=k[:idx_min], a=a)
         pk_nl_mid = P_k_NL_fR(cosmo, MGParams, k_allowed, a)
         pk_nl_end = ccl.nonlin_matter_power(cosmo, k=k[idx_max:], a=a)
         
@@ -778,16 +800,18 @@ def Get_Pk2D_obj(cosmo, MGParams,linear=False,gravity_model="GR"):
 
 ########### Functions for NL P(k) multiplied by Sigma - only for Sigma diff 1, so MuSigma param only ###########
 
+########### Functions for NL P(k) multiplied by Sigma - only for Sigma diff 1, so MuSigma param only ###########
+
 def Get_Pk2D_obj_delk_musigma(cosmo, MGParams):
    
-    ########### Functions for linear matter power spectrum multiplied by Sigma**2 ###########        
+    ########### Functions for linear matter power spectrum multiplied by Sigma ###########        
     def pk_funcSigma_muSigma_lin(k, a):
         return sigma_lin_param(MGParams, cosmo,a)*P_k_musigma(cosmo, MGParams, k, a)
 
     return ccl.pk2d.Pk2D.from_function(pkfunc=pk_funcSigma_muSigma_lin, is_logp=False)
 
 
-def Get_Pk2D_obj_deldel_musigma(cosmo, MGParams):
+def Get_Pk2D_obj_kk_musigma(cosmo, MGParams):
    
     ########### Functions for linear matter power spectrum multiplied by Sigma**2 ###########        
     def pk_funcSigma2_muSigma_lin(k, a):
@@ -795,8 +819,8 @@ def Get_Pk2D_obj_deldel_musigma(cosmo, MGParams):
 
     return ccl.pk2d.Pk2D.from_function(pkfunc=pk_funcSigma2_muSigma_lin, is_logp=False)
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Wrapper Cell function ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Wrapper Cell function ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 def Cell(ell_binned, cosmo, z, Binned_distribution_s, Binned_distribution_l,Bias_distribution, MGParams,P_delta2D_S,
          tracer1_type="k", 
@@ -1023,9 +1047,11 @@ def linear_scale_cuts_v2(dvec_nl, dvec_lin, cov):
             inv_cov_cut = np.linalg.pinv(cov_cut)
             chi2_temp[i] = np.dot(delta_dvec, np.dot(inv_cov_cut, delta_dvec))
             #sum_temp[i] = np.sum(np.delete(np.delete(sum_terms, i, axis=0), i, axis=1))
+        print('chi2_temp=', chi2_temp)
             
         #Find the index of data point that is cut to produce the smallest chi2:
         ind_min = np.argmin(chi2_temp)
+        print('ind_min=', ind_min)
             
         # Cut that element
         dvec_nl = np.delete(dvec_nl, ind_min)
@@ -1039,10 +1065,11 @@ def linear_scale_cuts_v2(dvec_nl, dvec_lin, cov):
     # Use this to get the rp indices and scales we should cut.
 
     ex_inds = [i for i in range(len(dvec_nl_in)) if dvec_nl_in[i] not in dvec_nl]
+    print('ex_inds=', ex_inds)
 	
     return ex_inds
 
-def baryonic_scale_cuts_v2(cosmo, ell, dvec_full, dvec_shear, dvec_kmax, cov_full):
+def baryonic_scale_cuts_v2(ell, dvec_full, dvec_shear, dvec_kmax, cov_full):
     """ 
     Modified function from Danielle.
     Gets the scales (and vector indices) which are excluded if we
@@ -1067,7 +1094,7 @@ def baryonic_scale_cuts_v2(cosmo, ell, dvec_full, dvec_shear, dvec_kmax, cov_ful
     delk_z_array = np.array([0.30,0.30,0.30,0.50,0.50,0.70,0.70])
     deldel_z_array = np.array([0.30,0.50,0.70,0.90,1.10])
     z_array = np.append(delk_z_array, deldel_z_array)
-    chi = ccl.background.comoving_radial_distance(cosmo, 1/(z_array+1))
+    chi = ccl.background.comoving_radial_distance(cosmo_universe, 1/(z_array+1))
     ellmax = k_max * chi - 0.5
     
     starting_index = len(dvec_shear)
@@ -1106,6 +1133,7 @@ def baryonic_scale_cuts_v2(cosmo, ell, dvec_full, dvec_shear, dvec_kmax, cov_ful
             inv_cov_cut = np.linalg.pinv(cov_cut)
             chi2_temp[i] = np.dot(delta_dvec, np.dot(inv_cov_cut, delta_dvec))
             #sum_temp[i] = np.sum(np.delete(np.delete(sum_terms, i, axis=0), i, axis=1))
+        print('chi2_temp=', chi2_temp)
             
         #Find the index of data point that is cut to produce the smallest chi2:
         ind_min = np.argmin(chi2_temp)
@@ -1116,7 +1144,6 @@ def baryonic_scale_cuts_v2(cosmo, ell, dvec_full, dvec_shear, dvec_kmax, cov_ful
         cov = np.delete(np.delete(cov, ind_min, axis=0), ind_min, axis=1)
         dvec_full = np.delete(dvec_full, ind_min)
 
-
         if (chi2_temp[ind_min]<=1.0):
             break
 				
@@ -1125,6 +1152,7 @@ def baryonic_scale_cuts_v2(cosmo, ell, dvec_full, dvec_shear, dvec_kmax, cov_ful
     cov_full[:len(dvec_shear), :len(dvec_shear)] = cov
     
     ex_inds = [i for i in range(len(dvec_full_in)) if dvec_full_in[i] not in dvec_full]
+    print('ex_inds=', ex_inds)
 	
     return ex_inds
 
@@ -1219,9 +1247,9 @@ def loglikelihood_noscalecut(Data, cosmo, MGparams, InvCovmat, Bias_distribution
     binned_ell_deldel = bin_ell_deldel(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, Binned_distribution_l)
 
     # Precompute Pk2D objects
-    P_delta2D_muSigma_kk = Get_Pk2D_obj(cosmo, MGparams, linear=True, gravity_model="muSigma")
+    P_delta2D_muSigma_kk = Get_Pk2D_obj_kk_musigma(cosmo, MGparams)
     P_delta2D_muSigma_delk = Get_Pk2D_obj_delk_musigma(cosmo, MGparams)
-    P_delta2D_muSigma_deldel = Get_Pk2D_obj_deldel_musigma(cosmo, MGparams)
+    P_delta2D_muSigma_deldel =   Get_Pk2D_obj(cosmo, MGparams, linear=True, gravity_model="muSigma")
     
     ########## Get theoretical data vector for single MCMC step - linear , muSigmaparam ##########
     # shape-shape
@@ -1255,7 +1283,7 @@ def loglikelihood_noscalecut(Data, cosmo, MGparams, InvCovmat, Bias_distribution
 # P_k_sim = P_k_sim_mock
 # Data = C_ell_data_mock
 # Covmat = gauss_cov
-def loglikelihood(Data, cosmo,cosmo_linear, MGparams, L_ch_inv, Bias_distribution, data_fsigma8):
+def loglikelihood(Data, cosmo,cosmo_linear, MGparams, L_ch, L_ch_inv, Bias_distribution, data_fsigma8):
     
     #start = time.time()
     z_fsigma8, fsigma_8_dataset, invcovariance_fsigma8 = data_fsigma8
@@ -1418,7 +1446,7 @@ def loglikelihood(Data, cosmo,cosmo_linear, MGparams, L_ch_inv, Bias_distributio
     Diff_fsigma8 = fsigma_8_dataset - fsigma8_musigma(cosmo, MGparams, 1/(z_fsigma8+1))
     loglik_fsigma8 = -0.5*(np.matmul(np.matmul(Diff_fsigma8,invcovariance_fsigma8),Diff_fsigma8))
     
-    return -0.5*(np.matmul(Diff_cut.T,Diff_cut)) + loglik_fsigma8 
+    return -0.5*(np.matmul(Diff_cut.T,Diff_cut)) + loglik_fsigma8
 
 
 ###################################################################
