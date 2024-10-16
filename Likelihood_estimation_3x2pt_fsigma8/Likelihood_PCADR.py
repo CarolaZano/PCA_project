@@ -1,63 +1,25 @@
 """ import useful functions """
 
 # Generic
-import pandas as pd
 import numpy as np
 import scipy
-from itertools import islice, cycle
-import math
 import os
 import sys
 from scipy.integrate import odeint
-from joblib import Parallel, delayed
 import itertools
-from importlib import reload
 from functools import lru_cache
 import scipy.integrate
 
 # cosmology
 import pyccl as ccl
-from astropy.io import fits
-import yaml
-import sacc
 import time
-
-# covariance - Charlie's version of TJPCov
-MODULE_PATH = "/home/c2042999/TJPCov/tjpcov/__init__.py"
-MODULE_NAME = "tjpcov"
-import importlib
-spec = importlib.util.spec_from_file_location(MODULE_NAME, MODULE_PATH)
-module = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = module 
-spec.loader.exec_module(module)
-from tjpcov.covariance_calculator import CovarianceCalculator
-
-# Generate data sets
-from sklearn.datasets import make_blobs
-
-# PCA
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 
 # SRD Binning
 import srd_redshift_distributions as srd
 import binning
 
-# Data Visualization
-import matplotlib.pyplot as plt
-from tabulate import tabulate
-import matplotlib.patches as mpatches
-#import seaborn as sns
-
 # MCMC
 import emcee
-import matplotlib.pyplot as plt
-from scipy.optimize import minimize
-import corner
-from chainconsumer import ChainConsumer, Chain, make_sample
-from IPython.display import display, Math
-from multiprocessing import Pool
-from tqdm import tqdm
 
 # nDGP NL and lin Pk
 from nDGPemu import BoostPredictor
@@ -1069,7 +1031,7 @@ def linear_scale_cuts_v2(dvec_nl, dvec_lin, cov):
 	
     return ex_inds
 
-def baryonic_scale_cuts_v2(ell, dvec_full, dvec_shear, dvec_kmax, cov_full):
+def baryonic_scale_cuts_v2(cosmo, ell, dvec_full, dvec_shear, dvec_kmax, cov_full):
     """ 
     Modified function from Danielle.
     Gets the scales (and vector indices) which are excluded if we
@@ -1094,7 +1056,7 @@ def baryonic_scale_cuts_v2(ell, dvec_full, dvec_shear, dvec_kmax, cov_full):
     delk_z_array = np.array([0.30,0.30,0.30,0.50,0.50,0.70,0.70])
     deldel_z_array = np.array([0.30,0.50,0.70,0.90,1.10])
     z_array = np.append(delk_z_array, deldel_z_array)
-    chi = ccl.background.comoving_radial_distance(cosmo_universe, 1/(z_array+1))
+    chi = ccl.background.comoving_radial_distance(cosmo, 1/(z_array+1))
     ellmax = k_max * chi - 0.5
     
     starting_index = len(dvec_shear)
@@ -1283,7 +1245,7 @@ def loglikelihood_noscalecut(Data, cosmo, MGparams, InvCovmat, Bias_distribution
 # P_k_sim = P_k_sim_mock
 # Data = C_ell_data_mock
 # Covmat = gauss_cov
-def loglikelihood(Data, cosmo,cosmo_linear, MGparams, L_ch, L_ch_inv, Bias_distribution, data_fsigma8):
+def loglikelihood(Data, cosmo,cosmo_linear, MGparams, L_ch_inv, Bias_distribution, data_fsigma8):
     
     #start = time.time()
     z_fsigma8, fsigma_8_dataset, invcovariance_fsigma8 = data_fsigma8
@@ -1299,9 +1261,9 @@ def loglikelihood(Data, cosmo,cosmo_linear, MGparams, L_ch, L_ch_inv, Bias_distr
     binned_ell_deldel = bin_ell_deldel(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, Binned_distribution_l)
 
     # Precompute Pk2D objects
-    P_delta2D_muSigma_kk = Get_Pk2D_obj(cosmo, MGparams, linear=True, gravity_model="muSigma")
+    P_delta2D_muSigma_kk = Get_Pk2D_obj_kk_musigma(cosmo, MGparams)
     P_delta2D_muSigma_delk = Get_Pk2D_obj_delk_musigma(cosmo, MGparams)
-    P_delta2D_muSigma_deldel = Get_Pk2D_obj_deldel_musigma(cosmo, MGparams)
+    P_delta2D_muSigma_deldel =   Get_Pk2D_obj(cosmo, MGparams, linear=True, gravity_model="muSigma")
     
     P_delta2D_nDGP_lin = Get_Pk2D_obj(cosmo, MGparams, linear=True, gravity_model="nDGP")
     P_delta2D_nDGP_nl = Get_Pk2D_obj(cosmo, MGparams, linear=False, gravity_model="nDGP")

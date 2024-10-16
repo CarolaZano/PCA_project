@@ -432,7 +432,7 @@ def main(args):
     del mockdata
     
     print("starting baryonic scale cuts")
-    newdat = baryonic_scale_cuts_v2(ell_mockdata, D_mockdata_test, D_kk_mockdata_test, D_kk_mockdata_kmax, SRD_compare)
+    newdat = baryonic_scale_cuts_v2(cosmo_universe, ell_mockdata, D_mockdata_test, D_kk_mockdata_test, D_kk_mockdata_kmax, SRD_compare)
     
     L_choleski = L_choleski_uncut
     L_choleski_inv = L_choleski_inv_uncut
