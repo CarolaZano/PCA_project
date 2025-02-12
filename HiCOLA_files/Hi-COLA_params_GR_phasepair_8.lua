@@ -38,19 +38,19 @@ simulation_use_scaledependent_cola = true
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
-cosmology_OmegaCDM = 0.23861141342819256
+cosmology_OmegaCDM = 0.26961902466175225
 --- Baryon density
-cosmology_Omegab = 0.04112956545434151
+cosmology_Omegab = 0.05004097533824776
 -- Massive neutrino density
 cosmology_OmegaMNu = 0.0
 -- Total dark energy density
-cosmology_OmegaLambda = 0.7201788596693127
+cosmology_OmegaLambda = 0.6802464966141873
 -- Effective number of relativistic species
 cosmology_Neffective = 3.046
 -- Temperature of CMB today
 cosmology_TCMB_kelvin = 2.72548
 -- Hubble parameter
-cosmology_h = 0.7307
+cosmology_h = 0.6688
 -- Primodial amplitude
 cosmology_As = 2.092e-09
 -- Spectral index
