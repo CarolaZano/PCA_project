@@ -10,7 +10,6 @@ import itertools
 from functools import lru_cache
 import scipy.integrate
 from scipy.interpolate import RectBivariateSpline
-from numba import njit
 
 # cosmology
 import pyccl as ccl
@@ -231,23 +230,16 @@ def P_k_fR_lin(GR_pk2D_obj,interp_fR_Pk,cosmo, MGparams, k, a):
 
 """linear matter power spectra (parametrizations)"""
 
-"""
 def mu_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
-    E_val = E(cosmoMCMCStep, a)
-    return 1 + mu0/E_val**2
-
-def sigma_lin_param(MGparams, cosmoMCMCStep, a):
-    H0rc, fR0, n, mu0, Sigma0 = MGparams
-    E_val = E(cosmoMCMCStep, a)
-    return 1 + Sigma0/E_val**2
-"""
-
-def mu_lin_param(MGparams, cosmoMCMCStep, a):
-    H0rc, fR0, n, mu0, Sigma0 = MGparams
-    E_val = E(cosmoMCMCStep, a)
-    return 1 + mu0/E_val**2
-
+    if mu0 == 0:
+        return 1 if np.isscalar(a) else np.ones(len(a))
+    else:
+        E_val = E(cosmoMCMCStep, a)
+        # from ReACT paper
+        beta = 1 + E_val/np.sqrt(mu0) * (1+ a*dEda(cosmoMCMCStep, a)/3/E_val)
+        return 1 + 1/3/beta
+                
 def sigma_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
     E_val = E(cosmoMCMCStep, a)
@@ -259,9 +251,9 @@ def solverGrowth_musigma(y,a,cosmoMCMCStep, MGparams):
 
     mu = mu_lin_param(MGparams, cosmoMCMCStep, a)
     Sigma = sigma_lin_param(MGparams, cosmoMCMCStep, a)
-    eta = 2*Sigma/mu - 1
+    #eta = 2*Sigma/mu - 1
     
-    ydot = [a3EdDda / (E_val*a**3), 3*cosmoMCMCStep["Omega_m"]*D*(mu/eta)/(2*E_val*a**2)]
+    ydot = [a3EdDda / (E_val*a**3), 3*cosmoMCMCStep["Omega_m"]*D*(mu)/(2*E_val*a**2)]
     return ydot
     
 def solverGrowth_GR(y,a,cosmoMCMCStep):
