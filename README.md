@@ -55,9 +55,7 @@ Likelihood_*.ipynb show the parameter inference process in notebook form. They a
 
 manim_visualising_PCAs.ipynb within Visualizing_PCAs/ has a good visualization of how PCA data reduction for MG theories works. Alternatively, see the video below:
 
-<video width="600" autoplay loop muted>
-  <source src="PCA_elltodataspace.mp4" type="video/mp4">
-</video>
+![Demo](demo.gif)
 
 ---
 
