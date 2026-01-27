@@ -1,0 +1,8 @@
+[project]
+name = "MG-PCA-DataReduction"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{name = "Carola Zanoletti"}]
+maintainers = [{name = "Carola Zanoletti"}]
+description = " Principal Components Analysis-based Data Reduction framework to run parameter inference for cosmological (3x2pt) data."
+version = "0.0.1"

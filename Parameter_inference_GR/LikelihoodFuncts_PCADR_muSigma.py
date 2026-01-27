@@ -906,10 +906,10 @@ def f_frac_err(GR_pk2D_obj,cosmo, MGparams,b, zeff, nbar, V):
     dPdf = diff_P_f(GR_pk2D_obj,cosmo, MGparams,b, k, mu, zeff)
     
     # Do the integration in k in each case
-    int_in_k_ff = [scipy.integrate.simps(k**2 * dPdf[mi] * invcov[mi] * dPdf[mi], k) for mi in range(len(mu))]
+    int_in_k_ff = [scipy.integrate.simpson(k**2 * dPdf[mi] * invcov[mi] * dPdf[mi], k) for mi in range(len(mu))]
 	
     # And in mu.
-    int_in_mu_ff = scipy.integrate.simps(np.asarray(int_in_k_ff), mu)
+    int_in_mu_ff = scipy.integrate.simpson(np.asarray(int_in_k_ff), mu)
 	
     Fisher_ff = np.zeros((2,2)) # order is b then f
     

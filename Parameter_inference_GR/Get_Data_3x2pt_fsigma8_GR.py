@@ -38,7 +38,7 @@ import emcee
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 import corner
-from chainconsumer import ChainConsumer, Chain, make_sample
+#from chainconsumer import ChainConsumer, Chain, make_sample
 from IPython.display import display, Math
 from multiprocessing import Pool
 from tqdm import tqdm
@@ -70,6 +70,11 @@ def main(args):
     h_var = args.h
     ns_var = args.ns
     As_var = args.As
+
+    ell_min_mockdata = args.ellmin
+    ell_max_mockdata = args.ellmax
+    ell_bin_num_mockdata = args.ellbin
+    covariance_file = args.covfile
 
     ###############################################################################
     #Create mock redshift distribution (define z and output Binned_distribution(z))
@@ -164,15 +169,6 @@ def main(args):
     
     
     MGParam_universe = [0.0,0.0,0,0,0]
-
-    # define ell and C_ell shapes -- will depend on the data
-
-    ell_min_mockdata = 20
-    ell_max_mockdata = 1478.5
-    
-    # define quantities for binning of ell -- will depend on the data
-    
-    ell_bin_num_mockdata = 13
     
     print("collecting data")
 
@@ -285,9 +281,11 @@ def main(args):
     invcov_fsigma8 = np.linalg.inv(cov_fsigma8)
     
     # ~~~~~~~~~~~~~~~~~~~~~~~~ Get Covariance - for now just using SRD one ~~~~~~~~~~~~~~~~~~~~~~~~
-    
-    covfile = np.genfromtxt("Y1_3x2pt_clusterN_clusterWL_cov")
-    
+    covfile = np.genfromtxt(covariance_file)
+
+    ## NOTE: change/remove the code below when there is a better way to find the covariance
+    # rather than just taking the SRD one and cutting it down.
+    ###############################################################################
     shear_SRD = np.zeros((705,705))
     ell_test_SRD = np.zeros(705)
     
@@ -311,8 +309,10 @@ def main(args):
                 SRD_compare = np.delete(SRD_compare, j*bins_SRD + i - idx, 1)
                 idx += 1
     
+    # remove code until here when better covariance is available. Define new SRD_compare
     L_choleski_uncut = np.linalg.cholesky(np.matrix(SRD_compare))
     L_choleski_inv_uncut = np.linalg.inv(L_choleski_uncut)
+
 
     ###############################################################################
     # Apply Scale Cuts
@@ -433,7 +433,10 @@ if __name__ == '__main__':
     parser.add_argument('--h', type=float, default=0.6688, help='h, reduced hubble parameter')
     parser.add_argument('--ns', type=float, default=0.9626, help='n_s, scalar spectral index')
     parser.add_argument('--As', type=float, default=2.092e-9, help='A_s, primordial amplitude of matter fluctuations')
-    # carry on from here
+    parser.add_argument('--ellmin', type=float, default=20, help='Minimum ell value for mock data')
+    parser.add_argument('--ellmax', type=float, default=1478.5, help='Maximum ell value for mock data')
+    parser.add_argument('--ellbin', type=int, default=13, help='Number of ell bins for mock data')
+    parser.add_argument('--covfile', type=str, default="Y1_3x2pt_clusterN_clusterWL_cov", help='Covariance file path')
     args = parser.parse_args()
 
     main(args)
