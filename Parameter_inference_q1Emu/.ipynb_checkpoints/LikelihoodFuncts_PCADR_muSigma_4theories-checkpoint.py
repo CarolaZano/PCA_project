@@ -28,12 +28,16 @@ from nDGPemu import BoostPredictor
 # f(R) emu (eMANTIS)
 from emantis import FofrBoost
 
-# Initialise EMANTIS emulator.
-emu_fR = FofrBoost()
+# screened gamma
+import MGEmu as mgemu
 
 """Initialize some things (e.g. emulators)"""
 # Load the nDGP emulator
 model_nDGP = BoostPredictor()
+# Initialise EMANTIS emulator.
+emu_fR = FofrBoost()
+# Initialize screened gamma emulator.
+emulator_MGEmu = mgemu.MG_boost(model='gamma')
 
 ###################################################################
 ############### MATTER POWER SPECTRUM FUNCTIONS ###################
@@ -92,7 +96,44 @@ def P_k_NL_fR(GR_pk2D_obj,cosmo, MGparams, k, a):
     Pk = pkratio_fR*Pk_ccl
 
     return Pk
+
+# NL matter power spectra in screened linder gamma
+def P_k_NL_gammaparam(GR_pk2D_obj,cosmo, MGparams, k, a):
     
+    # gamma screening emulator - get boost
+    cosmo_params = {
+    'Omega_m'     :  [cosmo["Omega_m"]],
+    'As'            :  [cosmo["A_s"]],
+    'Omega_b'  :  [cosmo["Omega_b"]],
+    'ns'            :  [cosmo["n_s"]],
+    'H0'        :  [100*cosmo["h"]],
+    'Omega_nu' :  [0.0],
+    'gamma'  :  [0.4],
+    'q1'  :  [0.76],
+    'z'  :  [1/a - 1]}
+
+    # Turn k into units of h/Mpc
+    k = k/cosmo["h"]
+    
+    k_values_MGEmu, boost_MGEmu = emulator_MGEmu.get_nonlinear_boost(**cosmo_params)
+
+    k_max = k_values_MGEmu[-1]
+    B_kmax = boost_MGEmu[0][-1]
+    B_dash_kmax = (np.gradient(boost_MGEmu[0])/np.gradient(k_values_MGEmu))[-1]
+    
+    # Power law
+    n = B_dash_kmax/B_kmax * k_max
+    A = B_kmax / k_max**n
+    pkratio = np.zeros(len(k))
+    
+    pkratio[k > k_max] = A * k[k > k_max] ** n
+    pkratio[k <= k_max] = np.interp(k[k <= k_max],k_values_MGEmu[113:], boost_MGEmu[0][113:])
+    
+    # Get GR power spectrum
+    
+    Pk_ccl = GR_pk2D_obj.__call__(k*cosmo["h"], a=a) # units (Mpc)^3
+    return pkratio*Pk_ccl
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Linear ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """Linear matter power spectra nDGP"""
 
@@ -228,18 +269,67 @@ def P_k_fR_lin(GR_pk2D_obj,interp_fR_Pk,cosmo, MGparams, k, a):
 
     return Pk_modified  # units (Mpc)^3
 
+
+## screened gamma param 
+
+# dimensionless hubble parameter in GR
+def E_norad(cosmoMCMCStep, a):
+    Omg_r = 0#cosmoMCMCStep["Omega_g"]*(1+ 3.046*7/8 * (4/11)**(7/8))
+    return np.sqrt(cosmoMCMCStep["Omega_m"]/a**3 +Omg_r/a**4 + (1 - cosmoMCMCStep["Omega_m"] - Omg_r))
+
+
+# mu(k,a) = mu(a) in gamma param
+def mu_gammaparam(gamma0, cosmo, a):    
+    #gamma1 = 0.0
+    Omg_m = cosmo["Omega_m"]*a**(-3)/E_norad(cosmo, a)**2
+    #gamma = gamma0 + gamma1*(a+ 1/a -2)
+    
+    #mu = 2/3*Omg_m**(gamma-1) * (gamma1*(a-1/a)*np.log(Omg_m) + Omg_m**gamma + 2 -3*gamma + 3*(gamma-0.5)*Omg_m)
+    mu_const = 2/3*Omg_m**(gamma0-1) * (Omg_m**gamma0 + 2 -3*gamma0 + 3*(gamma0-0.5)*Omg_m)
+    #mu = 2/3*Omg_m**(gamma-1) *gamma1*(a-1/a)*np.log(Omg_m) + mu_const
+    return mu_const
+
+def solverGrowth_gammaparam(y,a,cosmo, gamma0):
+    E_val = E_norad(cosmo, a)
+    D , a3EdDda = y
+    
+    ydot = [a3EdDda / (E_val*a**3), 3*cosmo["Omega_m"]*D*(mu_gammaparam(gamma0, cosmo, a))/(2*E_val*a**2)]
+    return ydot
+    
+def P_k_gamma_lin(GR_pk2D_obj,cosmo, MGparams, k, a):
+    
+    # Get growth factor in nDGP and GR
+    
+    a_solver = np.linspace(1/50,1,100)
+    Soln = odeint(solverGrowth_gammaparam, [a_solver[0], (E_norad(cosmo, a_solver[0])*a_solver[0]**3)], a_solver, \
+                  args=(cosmo,0.4), mxstep=int(1e4))
+    
+    Delta = Soln.T[0]
+    
+    Soln = odeint(solverGrowth_gammaparam, [a_solver[0], (E_norad(cosmo, a_solver[0])*a_solver[0]**3)], a_solver,\
+                  args=(cosmo,0.55), mxstep=int(1e4))
+    
+    Delta_GR = Soln.T[0]
+
+    # Get Pk linear in GR
+    
+    Pk_GR = GR_pk2D_obj.__call__(k=k, a=a)
+
+    idx_mdom = 0
+    
+    # get normalization at matter domination
+    Delta_MG_49 = Delta[idx_mdom]
+    Delta_GR_49 = Delta_GR[idx_mdom]
+    return np.interp(a, a_solver, (Delta / Delta_MG_49) **2 / (Delta_GR / Delta_GR_49)**2) * Pk_GR  # units (Mpc)^3
+
 """linear matter power spectra (parametrizations)"""
 
+"""
 def mu_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
-    if mu0 == 0:
-        return 1 if np.isscalar(a) else np.ones(len(a))
-    else:
-        E_val = E(cosmoMCMCStep, a)
-        # from ReACT paper
-        beta = 1 + E_val/np.sqrt(mu0) * (1+ a*dEda(cosmoMCMCStep, a)/3/E_val)
-        return 1 + 1/3/beta
-                
+    E_val = E(cosmoMCMCStep, a)
+    return 1 + mu0/E_val**2
+
 def sigma_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
     E_val = E(cosmoMCMCStep, a)
@@ -255,7 +345,7 @@ def sigma_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
     E_val = E(cosmoMCMCStep, a)
     return 1 + Sigma0/E_val**2
-"""
+
 def solverGrowth_musigma(y,a,cosmoMCMCStep, MGparams):
     E_val = E(cosmoMCMCStep, a)
     D , a3EdDda = y
@@ -303,7 +393,7 @@ def P_k_musigma(GR_pk2D_obj,cosmoMCMCStep, MGparams, k, a):
     Pk_GR = GR_pk2D_obj.__call__(k, a)
 
     # find the index for matter domination)
-    idx_mdom = 0#np.argmax(a_solver**(-3) / E(cosmoMCMCStep, a_solver)**2)          
+    idx_mdom = np.argmax(a_solver**(-3) / E(cosmoMCMCStep, a_solver)**2)          
     # get normalization at matter domination
     Delta_49 = Delta[idx_mdom]
     Delta_GR_49 = Delta_GR[idx_mdom]
@@ -727,7 +817,15 @@ def Get_Pk2D_obj(GR_pk2D_obj, interp_fR_Pk,cosmo, MGParams,linear=False,gravity_
         pk = np.concatenate((pk_lin_start, pk_nl_mid, pk_nl_end), axis = 0)
         
         return pk
-    
+
+    def pk_func_gamma_NL(k, a):
+        z = 1 / a - 1
+        if z > 2.4:
+            return GR_pk2D_obj.__call__(k,a)
+            
+        # condition on z
+        return P_k_NL_gammaparam(GR_pk2D_obj,cosmo, MGParams, k, a)
+        
     def pk_func_muSigma_NL(k, a):
         raise Exception('there is no non-linear power spectrum available for muSigma parametrization.')
         
@@ -741,6 +839,10 @@ def Get_Pk2D_obj(GR_pk2D_obj, interp_fR_Pk,cosmo, MGParams,linear=False,gravity_
         
         # condition on z
         return P_k_fR_lin(GR_pk2D_obj,interp_fR_Pk,cosmo, MGParams, k, a)
+
+    def pk_func_gamma_lin(k, a):
+        # condition on z
+        return P_k_gamma_lin(GR_pk2D_obj,cosmo, MGParams, k, a)
         
     def pk_func_muSigma_lin(k, a):
         # condition on z
@@ -752,9 +854,11 @@ def Get_Pk2D_obj(GR_pk2D_obj, interp_fR_Pk,cosmo, MGParams,linear=False,gravity_
     ops = {
         ("nDGP" , False): pk_func_nDGP_NL, 
         ("f(R)" , False): pk_func_fR_NL, 
+        ("gamma" , False): pk_func_gamma_NL, 
         ("muSigma" , False): pk_func_muSigma_NL,
         ("nDGP" , True): pk_func_nDGP_lin, 
         ("f(R)" , True): pk_func_fR_lin, 
+        ("gamma" , True): pk_func_gamma_lin, 
         ("muSigma" , True): pk_func_muSigma_lin
     }
     
@@ -1317,6 +1421,8 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
     P_delta2D_nDGP_nl = Get_Pk2D_obj(P_delta2D_GR_nl,interp_fR_Pk,cosmo, MGparams, linear=False, gravity_model="nDGP")
     P_delta2D_fR_lin = Get_Pk2D_obj(P_delta2D_GR_lin,interp_fR_Pk,cosmo, MGparams, linear=True, gravity_model="f(R)")
     P_delta2D_fR_nl = Get_Pk2D_obj(P_delta2D_GR_nl,interp_fR_Pk,cosmo, MGparams, linear=False, gravity_model="f(R)")
+    P_delta2D_gamma_lin = Get_Pk2D_obj(P_delta2D_GR_lin,interp_fR_Pk,cosmo, MGparams, linear=True, gravity_model="gamma")
+    P_delta2D_gamma_nl = Get_Pk2D_obj(P_delta2D_GR_nl,interp_fR_Pk,cosmo, MGparams, linear=False, gravity_model="gamma")
     
     ########## Get theoretical data vector for single MCMC step - linear , muSigmaparam ##########
     # shape-shape
@@ -1407,7 +1513,7 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
 
     M3 = np.concatenate((M3_kk, M3_delk, M3_deldel), axis=0)
     
-    """GR"""
+    """MG3: GR"""
 
     # A: find C_ell for non-linear matter power spectrum
     # shape-shape 
@@ -1440,17 +1546,46 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
                 tracer1_type="g", tracer2_type="g")[1])).flatten()
 
     M2 = np.concatenate((M2_kk, M2_delk, M2_deldel), axis=0)
-    
+
+    """MG4: gamma""" 
+        
+    # A: find C_ell for non-linear matter power spectrum
+    # shape-shape 
+    B4_kk = (np.array(Cell(binned_ell_kk, \
+                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_gamma_nl,\
+                tracer1_type="k", tracer2_type="k")[1])).flatten()
+    # shape-pos
+    B4_delk = (np.array(Cell(binned_ell_delk, \
+                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_gamma_nl,\
+                tracer1_type="g", tracer2_type="k")[1])).flatten()
+    # pos-pos
+    B4_deldel = (np.array(Cell(binned_ell_deldel, \
+                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_gamma_nl,\
+                tracer1_type="g", tracer2_type="g")[1])).flatten()
+
+    B4 = np.concatenate((B4_kk, B4_delk, B4_deldel), axis=0)
+       
+    # B: find C_ell for linear matter power spectrum
+    # shape-shape
+    M4_kk = (np.array(Cell(binned_ell_kk, \
+                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_gamma_lin,\
+                tracer1_type="k", tracer2_type="k")[1])).flatten()
+    # shape-pos
+    M4_delk = (np.array(Cell(binned_ell_delk, \
+                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_gamma_lin,\
+                tracer1_type="g", tracer2_type="k")[1])).flatten()
+    # pos-pos
+    M4_deldel = (np.array(Cell(binned_ell_deldel, \
+                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_gamma_lin,\
+                tracer1_type="g", tracer2_type="g")[1])).flatten()
+
+    M4 = np.concatenate((M4_kk, M4_delk, M4_deldel), axis=0)
 
     ### COMBINE
-    """
-    B_data =np.array([B1,B2,B3])
-    M_data =np.array([M1,M2,M3])
-    """
-    # 1 - ndgp , 2 - gr, 3 - f(R)
-    B_data =np.array([B1])
-    M_data =np.array([M1])
     
+    B_data =np.array([B1,B2,B3, B4])
+    M_data =np.array([M1,M2,M3, M4])
+
     # EXTRACT PCA MATRIX
     Usvd = findPCA(M_data, B_data, L_ch_inv)
 

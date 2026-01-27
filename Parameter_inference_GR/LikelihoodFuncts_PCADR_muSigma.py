@@ -317,7 +317,7 @@ def sigma_8_musigma(GR_pk2D_obj,cosmo, MGparams, a_array):
         P_k_vals = P_k_musigma(GR_pk2D_obj,cosmo, MGparams, k_val, a)
         j1_vals = 3 * scipy.special.spherical_jn(1, k_val * 8 / cosmo["h"], derivative=False) / (k_val * 8 / cosmo["h"])
         integrand = k_val**2 * P_k_vals * j1_vals**2
-        integral_val = scipy.integrate.trapz(integrand, x=k_val)
+        integral_val = np.trapz(integrand, x=k_val)
         sigma_8_val = np.sqrt(integral_val / (2 * np.pi**2))
         sigma_8_vals.append(sigma_8_val)
     
@@ -331,7 +331,7 @@ def sigma_8_nDGP(GR_pk2D_obj,cosmo, MGparams, a_array):
         P_k_vals = P_k_nDGP_lin(GR_pk2D_obj,cosmo, MGparams, k_val, a)
         j1_vals = 3 * scipy.special.spherical_jn(1, k_val * 8 / cosmo["h"], derivative=False) / (k_val * 8 / cosmo["h"])
         integrand = k_val**2 * P_k_vals * j1_vals**2
-        integral_val = scipy.integrate.trapz(integrand, x=k_val)
+        integral_val = np.trapz(integrand, x=k_val)
         sigma_8_val = np.sqrt(integral_val / (2 * np.pi**2))
         sigma_8_vals.append(sigma_8_val)
     
@@ -345,7 +345,7 @@ def sigma_8_fR(GR_pk2D_obj,interp_fR_Pk,cosmo, MGparams, a_array):
         P_k_vals = P_k_fR_lin(GR_pk2D_obj,interp_fR_Pk,cosmo, MGparams, k_val, a)
         j1_vals = 3 * scipy.special.spherical_jn(1, k_val * 8 / cosmo["h"], derivative=False) / (k_val * 8 / cosmo["h"])
         integrand = k_val**2 * P_k_vals * j1_vals**2
-        integral_val = scipy.integrate.trapz(integrand, x=k_val)
+        integral_val = np.trapz(integrand, x=k_val)
         sigma_8_val = np.sqrt(integral_val / (2 * np.pi**2))
         sigma_8_vals.append(sigma_8_val)
     
@@ -1240,10 +1240,10 @@ def loglikelihood_noscalecut(Data, cosmo, MGparams, InvCovmat, Bias_distribution
     #print("time = ", time.time() - start)
 
     #### fsigma8 ####
-    #Diff_fsigma8 = fsigma_8_dataset - fsigma8_musigma(P_delta2D_GR_lin,cosmo, MGparams, 1/(z_fsigma8+1))
-    #loglik_fsigma8 = -0.5*(np.matmul(np.matmul(Diff_fsigma8,invcovariance_fsigma8),Diff_fsigma8))
+    Diff_fsigma8 = fsigma_8_dataset - fsigma8_musigma(P_delta2D_GR_lin,cosmo, MGparams, 1/(z_fsigma8+1))
+    loglik_fsigma8 = -0.5*(np.matmul(np.matmul(Diff_fsigma8,invcovariance_fsigma8),Diff_fsigma8))
 
-    return -0.5*(np.matmul(np.matmul(Diff,InvCovmat),Diff)) #+ loglik_fsigma8 
+    return -0.5*(np.matmul(np.matmul(Diff,InvCovmat),Diff)) + loglik_fsigma8 
     
 # log likelihood with cut data
 # P_k_sim = P_k_sim_mock
@@ -1260,7 +1260,7 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
     P_k_vals = P_delta2D_GR_lin.__call__(k_val, 1)
     j1_vals = 3 * scipy.special.spherical_jn(1, k_val * 8 / cosmo["h"], derivative=False) / (k_val * 8 / cosmo["h"])
     integrand = k_val**2 * P_k_vals * j1_vals**2
-    integral_val = scipy.integrate.trapz(integrand, x=k_val)
+    integral_val = np.trapz(integrand, x=k_val)
     sigma8_val = np.sqrt(integral_val / (2 * np.pi**2))
 
     if not 0.6083 < sigma8_val < 1.014:
@@ -1452,10 +1452,10 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
     #print("time = ", time.time() - start)
     
     #### fsigma8 ####
-    #Diff_fsigma8 = fsigma_8_dataset - fsigma8_musigma(P_delta2D_GR_lin, cosmo, MGparams, 1/(z_fsigma8+1))
-    #loglik_fsigma8 = -0.5*(np.matmul(np.matmul(Diff_fsigma8,invcovariance_fsigma8),Diff_fsigma8))
+    Diff_fsigma8 = fsigma_8_dataset - fsigma8_musigma(P_delta2D_GR_lin, cosmo, MGparams, 1/(z_fsigma8+1))
+    loglik_fsigma8 = -0.5*(np.matmul(np.matmul(Diff_fsigma8,invcovariance_fsigma8),Diff_fsigma8))
 
-    return -0.5*(np.matmul(Diff_cut.T,Diff_cut)) #+ loglik_fsigma8
+    return -0.5*(np.matmul(Diff_cut.T,Diff_cut)) + loglik_fsigma8
 
 
 ###################################################################

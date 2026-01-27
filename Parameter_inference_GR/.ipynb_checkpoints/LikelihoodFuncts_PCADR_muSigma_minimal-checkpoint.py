@@ -230,16 +230,12 @@ def P_k_fR_lin(GR_pk2D_obj,interp_fR_Pk,cosmo, MGparams, k, a):
 
 """linear matter power spectra (parametrizations)"""
 
+"""
 def mu_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
-    if mu0 == 0:
-        return 1 if np.isscalar(a) else np.ones(len(a))
-    else:
-        E_val = E(cosmoMCMCStep, a)
-        # from ReACT paper
-        beta = 1 + E_val/np.sqrt(mu0) * (1+ a*dEda(cosmoMCMCStep, a)/3/E_val)
-        return 1 + 1/3/beta
-                
+    E_val = E(cosmoMCMCStep, a)
+    return 1 + mu0/E_val**2
+
 def sigma_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
     E_val = E(cosmoMCMCStep, a)
@@ -255,7 +251,7 @@ def sigma_lin_param(MGparams, cosmoMCMCStep, a):
     H0rc, fR0, n, mu0, Sigma0 = MGparams
     E_val = E(cosmoMCMCStep, a)
     return 1 + Sigma0/E_val**2
-"""
+
 def solverGrowth_musigma(y,a,cosmoMCMCStep, MGparams):
     E_val = E(cosmoMCMCStep, a)
     D , a3EdDda = y
@@ -303,7 +299,7 @@ def P_k_musigma(GR_pk2D_obj,cosmoMCMCStep, MGparams, k, a):
     Pk_GR = GR_pk2D_obj.__call__(k, a)
 
     # find the index for matter domination)
-    idx_mdom = 0#np.argmax(a_solver**(-3) / E(cosmoMCMCStep, a_solver)**2)          
+    idx_mdom = np.argmax(a_solver**(-3) / E(cosmoMCMCStep, a_solver)**2)          
     # get normalization at matter domination
     Delta_49 = Delta[idx_mdom]
     Delta_GR_49 = Delta_GR[idx_mdom]
@@ -1193,14 +1189,11 @@ def baryonic_scale_cuts_v2(cosmo, ell, dvec_full, dvec_shear, dvec_kmax, cov_ful
 ###################################################################
 
 # log likelihood - no PCA cuts
-def loglikelihood_noscalecut(Data, cosmo, MGparams, InvCovmat, Bias_distribution, data_fsigma8):
+def loglikelihood_noscalecut(Data, cosmo, MGparams, InvCovmat):
     #start = time.time()
 
     # Precompute Pk2D objects: GR
     P_delta2D_GR_lin = Get_Pk2D_obj_kk_GR_lin(cosmo)
-    
-    # Extract fsigma8 data vector
-    z_fsigma8, fsigma_8_dataset, invcovariance_fsigma8 = data_fsigma8
     
     # Extract 3x2pt data vector
     D_data, ell_mockdata, z, Binned_distribution_s,Binned_distribution_l,\
@@ -1208,52 +1201,25 @@ def loglikelihood_noscalecut(Data, cosmo, MGparams, InvCovmat, Bias_distribution
 
     # shape-shape
     binned_ell_kk = bin_ell_kk(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, Binned_distribution_s)
-
-    # shape-pos
-    binned_ell_delk = bin_ell_delk(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, \
-                              Binned_distribution_s,Binned_distribution_l)
-
-    # pos-pos
-    binned_ell_deldel = bin_ell_deldel(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, Binned_distribution_l)
-
+    
     # Precompute Pk2D objects
     P_delta2D_muSigma_kk = Get_Pk2D_obj_kk_musigma(P_delta2D_GR_lin,cosmo, MGparams)
-    P_delta2D_muSigma_delk = Get_Pk2D_obj_delk_musigma(P_delta2D_GR_lin,cosmo, MGparams)
-    P_delta2D_muSigma_deldel = Get_Pk2D_obj(P_delta2D_GR_lin,None,cosmo, MGparams, linear=True, gravity_model="muSigma")
     
     ########## Get theoretical data vector for single MCMC step - linear , muSigmaparam ##########
     # shape-shape
-    D_theory_kk = np.array(Cell(binned_ell_kk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,\
+    D_theory = np.array(Cell(binned_ell_kk, \
+                cosmo, z , Binned_distribution_s,Binned_distribution_l,None,MGparams,\
                 P_delta2D_muSigma_kk, tracer1_type="k", tracer2_type="k")[1]).flatten()
-    # shape-pos
-    
-    D_theory_delk = np.array(Cell(binned_ell_delk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,\
-                P_delta2D_muSigma_delk, tracer1_type="g", tracer2_type="k")[1]).flatten()
-    # pos-pos
-
-    D_theory_deldel = np.array(Cell(binned_ell_deldel, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,\
-                P_delta2D_muSigma_deldel, tracer1_type="g", tracer2_type="g")[1]).flatten()
-
-    D_theory = np.append(np.append(D_theory_kk, D_theory_delk), D_theory_deldel)
     
     Diff = (D_data - D_theory)
 
-    #print("time = ", time.time() - start)
-
-    #### fsigma8 ####
-    Diff_fsigma8 = fsigma_8_dataset - fsigma8_musigma(P_delta2D_GR_lin,cosmo, MGparams, 1/(z_fsigma8+1))
-    loglik_fsigma8 = -0.5*(np.matmul(np.matmul(Diff_fsigma8,invcovariance_fsigma8),Diff_fsigma8))
-
-    return -0.5*(np.matmul(np.matmul(Diff,InvCovmat),Diff)) + loglik_fsigma8 
+    return -0.5*(np.matmul(np.matmul(Diff,InvCovmat),Diff))
     
 # log likelihood with cut data
 # P_k_sim = P_k_sim_mock
 # Data = C_ell_data_mock
 # Covmat = gauss_cov
-def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigma8):
+def loglikelihood(Data, cosmo, MGparams, L_ch_inv):
 
     # Precompute Pk2D objects: GR
     P_delta2D_GR_lin = Get_Pk2D_obj_kk_GR_lin(cosmo)
@@ -1271,7 +1237,7 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
         return -np.inf
         
     #start = time.time()
-    z_fsigma8, fsigma_8_dataset, invcovariance_fsigma8 = data_fsigma8
+    # z_fsigma8, fsigma_8_dataset, invcovariance_fsigma8 = data_fsigma8
 
     # Extract real data vector
     D_data, ell_mockdata, z, Binned_distribution_s,Binned_distribution_l,\
@@ -1279,178 +1245,60 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
 
     # Do binning
     binned_ell_kk = bin_ell_kk(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, Binned_distribution_s)
-    binned_ell_delk = bin_ell_delk(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, \
-                              Binned_distribution_s,Binned_distribution_l)
-    binned_ell_deldel = bin_ell_deldel(ell_min_mockdata, ell_max_mockdata, ell_bin_num_mockdata, Binned_distribution_l)
 
-    # GET f(R) LINEAR POWER SPECTRUM
-    ##########################
-    idx_mdom = 0
-    a_solver = np.linspace(1/50,1.1,50)
-    k_solver = np.logspace(-5,4,200)
 
-    Soln = odeint(solverGrowth_nDGP, [a_solver[0], (E(cosmo, a_solver[0])*a_solver[0]**3)], a_solver,\
-                  args=(cosmo,[0,0,0,0,0]), mxstep=int(1e4))
-    
-    Delta_GR = Soln.T[0]/Soln.T[0][idx_mdom]
-    
-    Delta = []
-    for i in range(len(k_solver)):
-        Soln = odeint(solverGrowth_fR, [a_solver[0], (E(cosmo, a_solver[0])*a_solver[0]**3)], a_solver, \
-                      args=(cosmo,MGparams, k_solver[i]), mxstep=int(1e4))
-        
-        Delta_i = Soln.T[0]
-        Delta.append(Delta_i/Delta_i[idx_mdom])
-
-    Delta = np.array(Delta)
-
-    # Get Pk linear in GR
-    
-    interp_fR_Pk = scipy.interpolate.RegularGridInterpolator((k_solver,a_solver), (Delta / Delta_GR)**2,bounds_error=False, fill_value=1.0)
     ##########################
     # Precompute Pk2D objects
     P_delta2D_muSigma_kk = Get_Pk2D_obj_kk_musigma(P_delta2D_GR_lin,cosmo, MGparams)
-    P_delta2D_muSigma_delk = Get_Pk2D_obj_delk_musigma(P_delta2D_GR_lin,cosmo, MGparams)
-    P_delta2D_muSigma_deldel =   Get_Pk2D_obj(P_delta2D_GR_lin,interp_fR_Pk,cosmo, MGparams, linear=True, gravity_model="muSigma")
     
-    P_delta2D_nDGP_lin = Get_Pk2D_obj(P_delta2D_GR_lin,interp_fR_Pk,cosmo, MGparams, linear=True, gravity_model="nDGP")
-    P_delta2D_nDGP_nl = Get_Pk2D_obj(P_delta2D_GR_nl,interp_fR_Pk,cosmo, MGparams, linear=False, gravity_model="nDGP")
-    P_delta2D_fR_lin = Get_Pk2D_obj(P_delta2D_GR_lin,interp_fR_Pk,cosmo, MGparams, linear=True, gravity_model="f(R)")
-    P_delta2D_fR_nl = Get_Pk2D_obj(P_delta2D_GR_nl,interp_fR_Pk,cosmo, MGparams, linear=False, gravity_model="f(R)")
+    P_delta2D_nDGP_lin = Get_Pk2D_obj(P_delta2D_GR_lin,None,cosmo, MGparams, linear=True, gravity_model="nDGP")
+    P_delta2D_nDGP_nl = Get_Pk2D_obj(P_delta2D_GR_nl,None,cosmo, MGparams, linear=False, gravity_model="nDGP")
     
     ########## Get theoretical data vector for single MCMC step - linear , muSigmaparam ##########
     # shape-shape
-    D_theory_kk = (np.array(Cell(binned_ell_kk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_muSigma_kk,\
+    D_theory = (np.array(Cell(binned_ell_kk, \
+                cosmo, z , Binned_distribution_s,None,None,MGparams,P_delta2D_muSigma_kk,\
                 tracer1_type="k", tracer2_type="k")[1])).flatten()
-    # shape-pos
-    D_theory_delk = (np.array(Cell(binned_ell_delk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_muSigma_delk,\
-                tracer1_type="k", tracer2_type="g")[1])).flatten()
-    # pos-pos
-    D_theory_deldel = (np.array(Cell(binned_ell_deldel, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_muSigma_deldel,\
-                tracer1_type="g", tracer2_type="g")[1])).flatten()
-
-    D_theory = np.concatenate((D_theory_kk, D_theory_delk, D_theory_deldel), axis=0)
     
     Diff = (D_data - D_theory)
     
     # Find Choleski scaled data vector
     Diff_ch = np.array(np.matmul(L_ch_inv, Diff.T))[0]
-
+    
     ########## GET DATA FOR DIFFERENCE MATRIX ##########
     """MG1: nDGP"""
     # A: find C_ell for non-linear matter power spectrum
     # shape-shape
-    B1_kk = (np.array(Cell(binned_ell_kk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_nDGP_nl,\
+    B1 = (np.array(Cell(binned_ell_kk, \
+                cosmo, z , Binned_distribution_s,None,None,MGparams,P_delta2D_nDGP_nl,\
                 tracer1_type="k", tracer2_type="k")[1])).flatten()
-    # shape-pos
-    B1_delk = (np.array(Cell(binned_ell_delk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_nDGP_nl,\
-                tracer1_type="g", tracer2_type="k")[1])).flatten()
-    # pos-pos
-    B1_deldel = (np.array(Cell(binned_ell_deldel, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_nDGP_nl,\
-                tracer1_type="g", tracer2_type="g")[1])).flatten()
-
-    B1 = np.concatenate((B1_kk, B1_delk, B1_deldel), axis=0)
        
     # B: find C_ell for linear matter power spectrum
     # shape-shape
-    M1_kk = (np.array(Cell(binned_ell_kk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_nDGP_lin,\
+    M1 = (np.array(Cell(binned_ell_kk, \
+                cosmo, z , Binned_distribution_s,None,None,MGparams,P_delta2D_nDGP_lin,\
                 tracer1_type="k", tracer2_type="k")[1])).flatten()
-    # shape-pos
-    M1_delk = (np.array(Cell(binned_ell_delk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_nDGP_lin,\
-                tracer1_type="g", tracer2_type="k")[1])).flatten()
-    # pos-pos
-    M1_deldel = (np.array(Cell(binned_ell_deldel, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_nDGP_lin,\
-                tracer1_type="g", tracer2_type="g")[1])).flatten()
 
-    M1 = np.concatenate((M1_kk, M1_delk, M1_deldel), axis=0)
-
-    """MG2: f(R)""" 
-        
-    # A: find C_ell for non-linear matter power spectrum
-    # shape-shape 
-    B3_kk = (np.array(Cell(binned_ell_kk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_fR_nl,\
-                tracer1_type="k", tracer2_type="k")[1])).flatten()
-    # shape-pos
-    B3_delk = (np.array(Cell(binned_ell_delk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_fR_nl,\
-                tracer1_type="g", tracer2_type="k")[1])).flatten()
-    # pos-pos
-    B3_deldel = (np.array(Cell(binned_ell_deldel, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_fR_nl,\
-                tracer1_type="g", tracer2_type="g")[1])).flatten()
-
-    B3 = np.concatenate((B3_kk, B3_delk, B3_deldel), axis=0)
-       
-    # B: find C_ell for linear matter power spectrum
-    # shape-shape
-    M3_kk = (np.array(Cell(binned_ell_kk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_fR_lin,\
-                tracer1_type="k", tracer2_type="k")[1])).flatten()
-    # shape-pos
-    M3_delk = (np.array(Cell(binned_ell_delk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_fR_lin,\
-                tracer1_type="g", tracer2_type="k")[1])).flatten()
-    # pos-pos
-    M3_deldel = (np.array(Cell(binned_ell_deldel, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_fR_lin,\
-                tracer1_type="g", tracer2_type="g")[1])).flatten()
-
-    M3 = np.concatenate((M3_kk, M3_delk, M3_deldel), axis=0)
     
     """GR"""
 
     # A: find C_ell for non-linear matter power spectrum
     # shape-shape 
-    B2_kk = (np.array(Cell(binned_ell_kk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_GR_nl,\
+    B2 = (np.array(Cell(binned_ell_kk, \
+                cosmo, z , Binned_distribution_s,None,None,MGparams,P_delta2D_GR_nl,\
                 tracer1_type="k", tracer2_type="k")[1])).flatten()
-    # shape-pos
-    B2_delk = (np.array(Cell(binned_ell_delk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_GR_nl,\
-                tracer1_type="g", tracer2_type="k")[1])).flatten()
-    # pos-pos
-    B2_deldel = (np.array(Cell(binned_ell_deldel, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_GR_nl,\
-                tracer1_type="g", tracer2_type="g")[1])).flatten()
-
-    B2 = np.concatenate((B2_kk, B2_delk, B2_deldel), axis=0)
        
     # B: find C_ell for linear matter power spectrum
     # shape-shape
-    M2_kk = (np.array(Cell(binned_ell_kk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_GR_lin,\
+    M2 = (np.array(Cell(binned_ell_kk, \
+                cosmo, z , Binned_distribution_s,None,None,MGparams,P_delta2D_GR_lin,\
                 tracer1_type="k", tracer2_type="k")[1])).flatten()
-    # shape-pos
-    M2_delk = (np.array(Cell(binned_ell_delk, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_GR_lin,\
-                tracer1_type="g", tracer2_type="k")[1])).flatten()
-    # pos-pos
-    M2_deldel = (np.array(Cell(binned_ell_deldel, \
-                cosmo, z , Binned_distribution_s,Binned_distribution_l,Bias_distribution,MGparams,P_delta2D_GR_lin,\
-                tracer1_type="g", tracer2_type="g")[1])).flatten()
-
-    M2 = np.concatenate((M2_kk, M2_delk, M2_deldel), axis=0)
-    
 
     ### COMBINE
-    """
-    B_data =np.array([B1,B2,B3])
-    M_data =np.array([M1,M2,M3])
-    """
-    # 1 - ndgp , 2 - gr, 3 - f(R)
-    B_data =np.array([B1])
-    M_data =np.array([M1])
     
+    B_data =np.array([B1,B2])
+    M_data =np.array([M1,M2])
+
     # EXTRACT PCA MATRIX
     Usvd = findPCA(M_data, B_data, L_ch_inv)
 
@@ -1459,11 +1307,7 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
     
     #print("time = ", time.time() - start)
     
-    #### fsigma8 ####
-    Diff_fsigma8 = fsigma_8_dataset - fsigma8_musigma(P_delta2D_GR_lin, cosmo, MGparams, 1/(z_fsigma8+1))
-    loglik_fsigma8 = -0.5*(np.matmul(np.matmul(Diff_fsigma8,invcovariance_fsigma8),Diff_fsigma8))
-
-    return -0.5*(np.matmul(Diff_cut.T,Diff_cut)) + loglik_fsigma8
+    return -0.5*(np.matmul(Diff_cut.T,Diff_cut)) 
 
 
 ###################################################################

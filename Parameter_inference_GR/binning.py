@@ -6,7 +6,7 @@
 
 import numpy as np
 import pandas
-from scipy.integrate import simpson, cumtrapz
+from scipy.integrate import simpson, cumulative_trapezoid
 from scipy.special import erf
 import yaml
 
@@ -107,7 +107,7 @@ class Binning:
         """
 
         # Calculate the cumulative distribution
-        cumulative_distribution = cumtrapz(redshift_distribution, redshift_range, initial=0)
+        cumulative_distribution = cumulative_trapezoid(redshift_distribution, redshift_range, initial=0)
         total_galaxies = cumulative_distribution[-1]
 
         # Find the bin edges
