@@ -10,7 +10,6 @@ import itertools
 from functools import lru_cache
 import scipy.integrate
 from scipy.interpolate import RectBivariateSpline
-from numba import njit
 
 # cosmology
 import pyccl as ccl
@@ -210,7 +209,7 @@ def P_k_fR_lin(GR_pk2D_obj,interp_fR_Pk,cosmo, MGparams, k, a):
     output Pk_nDGP (array) -> linear matter power spectrum for nDGP gravity, units (Mpc)^3
     """
     
-    # Get growth factor
+    # Get growth factor in nDGP and GR
     H0rc, fR0, n, mu, Sigma = MGparams
 
     # Get Pk linear in GR
@@ -259,9 +258,9 @@ def solverGrowth_musigma(y,a,cosmoMCMCStep, MGparams):
 
     mu = mu_lin_param(MGparams, cosmoMCMCStep, a)
     Sigma = sigma_lin_param(MGparams, cosmoMCMCStep, a)
-    eta = 2*Sigma/mu - 1
+    #eta = 2*Sigma/mu - 1
     
-    ydot = [a3EdDda / (E_val*a**3), 3*cosmoMCMCStep["Omega_m"]*D*(mu/eta)/(2*E_val*a**2)]
+    ydot = [a3EdDda / (E_val*a**3), 3*cosmoMCMCStep["Omega_m"]*D*(mu)/(2*E_val*a**2)]
     return ydot
     
 def solverGrowth_GR(y,a,cosmoMCMCStep):
@@ -318,7 +317,7 @@ def sigma_8_musigma(GR_pk2D_obj,cosmo, MGparams, a_array):
         P_k_vals = P_k_musigma(GR_pk2D_obj,cosmo, MGparams, k_val, a)
         j1_vals = 3 * scipy.special.spherical_jn(1, k_val * 8 / cosmo["h"], derivative=False) / (k_val * 8 / cosmo["h"])
         integrand = k_val**2 * P_k_vals * j1_vals**2
-        integral_val = scipy.integrate.trapz(integrand, x=k_val)
+        integral_val = np.trapz(integrand, x=k_val)
         sigma_8_val = np.sqrt(integral_val / (2 * np.pi**2))
         sigma_8_vals.append(sigma_8_val)
     
@@ -332,7 +331,7 @@ def sigma_8_nDGP(GR_pk2D_obj,cosmo, MGparams, a_array):
         P_k_vals = P_k_nDGP_lin(GR_pk2D_obj,cosmo, MGparams, k_val, a)
         j1_vals = 3 * scipy.special.spherical_jn(1, k_val * 8 / cosmo["h"], derivative=False) / (k_val * 8 / cosmo["h"])
         integrand = k_val**2 * P_k_vals * j1_vals**2
-        integral_val = scipy.integrate.trapz(integrand, x=k_val)
+        integral_val = np.trapz(integrand, x=k_val)
         sigma_8_val = np.sqrt(integral_val / (2 * np.pi**2))
         sigma_8_vals.append(sigma_8_val)
     
@@ -346,7 +345,7 @@ def sigma_8_fR(GR_pk2D_obj,interp_fR_Pk,cosmo, MGparams, a_array):
         P_k_vals = P_k_fR_lin(GR_pk2D_obj,interp_fR_Pk,cosmo, MGparams, k_val, a)
         j1_vals = 3 * scipy.special.spherical_jn(1, k_val * 8 / cosmo["h"], derivative=False) / (k_val * 8 / cosmo["h"])
         integrand = k_val**2 * P_k_vals * j1_vals**2
-        integral_val = scipy.integrate.trapz(integrand, x=k_val)
+        integral_val = np.trapz(integrand, x=k_val)
         sigma_8_val = np.sqrt(integral_val / (2 * np.pi**2))
         sigma_8_vals.append(sigma_8_val)
     
@@ -421,7 +420,7 @@ def solverGrowth_fR_const(y,a,cosmo, MGparams):
     ydot = [a3EdDda / (E_val*a**3), 3*cosmo["Omega_m"]*D*(mu)/(2*E_val*a**2)]
     return ydot
     
-def fsigma8_fR(GR_pk2D_obj,interp_fR_Pk,cosmoMCMCStep, MGparams, a):
+def fsigma8_fR(GR_pk2D_obj,cosmoMCMCStep, MGparams, a):
     
     """
     input k (array) -> wavevector, units 1/Mpc
@@ -445,7 +444,7 @@ def fsigma8_fR(GR_pk2D_obj,interp_fR_Pk,cosmoMCMCStep, MGparams, a):
     f_fR = np.interp(a, a_solver, f_fR_interp)
 
     k_val = np.logspace(-4,3,3000)
-    return f_fR * sigma_8_fR(GR_pk2D_obj,interp_fR_Pk,cosmoMCMCStep, MGparams, a)
+    return f_fR * sigma_8_fR(GR_pk2D_obj,cosmoMCMCStep, MGparams, a)
 
 ###################################################################
 ################### ANGULAR P(k) FUNCTIONS ########################
@@ -987,7 +986,7 @@ def linear_scale_cuts_v2(dvec_nl, dvec_lin, cov):
 	
     dvec_nl: data vector from nonlinear theory 
     dvec_lin: data vector from linear theory
-    cov: data covariance."""
+    cov: data covariance. """
 	
     # Make a copy of these initial input things before they are changed,
     # so we can compare and get the indices
@@ -1261,7 +1260,7 @@ def loglikelihood(Data, cosmo, MGparams, L_ch_inv, Bias_distribution, data_fsigm
     P_k_vals = P_delta2D_GR_lin.__call__(k_val, 1)
     j1_vals = 3 * scipy.special.spherical_jn(1, k_val * 8 / cosmo["h"], derivative=False) / (k_val * 8 / cosmo["h"])
     integrand = k_val**2 * P_k_vals * j1_vals**2
-    integral_val = scipy.integrate.trapz(integrand, x=k_val)
+    integral_val = np.trapz(integrand, x=k_val)
     sigma8_val = np.sqrt(integral_val / (2 * np.pi**2))
 
     if not 0.6083 < sigma8_val < 1.014:

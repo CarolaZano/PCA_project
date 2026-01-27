@@ -22,7 +22,7 @@ Y1_3x2pt_inv
 corr_example.txt
 cov_shearonly_Gaussian_Y1.txt
 
-Likelihood_*
+Likelihood_*/
 manual_C_ell.ipynb
 PCA_tests_covariance.ipynb
 Understanding_growth_nDGP.ipynb

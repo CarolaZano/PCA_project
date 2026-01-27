@@ -1,6 +1,34 @@
+# CAROLA note: to run this, modify Likelihood_GR_parallel_mpi_PCACuts.py by changing:
+# with Pool(nwalkers) as pool:
+# to 
+# with MPIPool() as pool:
+#    if not pool.is_master():
+#        pool.wait()
+#        sys.exit(0)
+#while not converged:
+#        gc.collect(generation=0)
+#        sampler_PCA.run_mcmc(pos, chain_len, progress=True, store=True)
+#        
+#        # Clear references in the worker pool
+#        pool.close()
+#        pool.join()
+#        del pool  # Ensure the pool object is removed
+#        gc.collect()  # Collect any lingering garbage
+#        pool = MPIPool()
+#        sampler_PCA.pool = pool
+#        pos = sampler_PCA.get_last_sample() if backend.iteration > 0 else pos
+#        
+#        # Check convergence
+#        try:
+#            tau = sampler_PCA.get_autocorr_time(tol=0)
+#            converged = np.all(tau * 100 < sampler_PCA.iteration)
+#        except emcee.autocorr.AutocorrError:
+#            pass
+
+
 #!/bin/bash
 #!
-#! Example SLURM job script for Peta4-CascadeLake (Cascade Lake CPUs, HDR IB)
+#! SLURM job script for Peta4-CascadeLake (Cascade Lake CPUs, HDR IB)
 #! Last updated: Fri 18 Sep 12:24:48 BST 2020
 #!
 
